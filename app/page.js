@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
+import { useSearchParams } from "next/navigation";
 import { giverName, wheelSections } from "@/lib/game-config";
+import FlipToggleNav from "@/app/components/flip-toggle-nav";
 
 const fireworkBursts = new Array(18).fill(null).map((_, index) => ({
   id: index,
@@ -20,19 +22,21 @@ const lanterns = [
 ];
 
 export default function Home() {
-  const [started, setStarted] = useState(false);
+  const searchParams = useSearchParams();
+  const shouldOpenSpinnerDirectly = searchParams.get("view") === "spinner";
+  const [started, setStarted] = useState(shouldOpenSpinnerDirectly);
   const [name, setName] = useState("");
   const [power, setPower] = useState(68);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [rotation, setRotation] = useState(0);
   const [result, setResult] = useState(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [players, setPlayers] = useState([]);
-  const [leaderboard, setLeaderboard] = useState([]);
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [incomingSpin, setIncomingSpin] = useState(null);
+  const wheelControls = useAnimationControls();
+  const rotationRef = useRef(0);
 
   const currentPlayer = useMemo(
     () => players.find((player) => player.name === name) ?? null,
@@ -56,7 +60,6 @@ export default function Home() {
 
       const data = await response.json();
       setPlayers(data.players ?? []);
-      setLeaderboard(data.leaderboard ?? []);
       setErrorMessage("");
     } catch (error) {
       setErrorMessage("Could not load player data. Check database connection.");
@@ -114,6 +117,18 @@ export default function Home() {
       setIsSpinning(true);
       setResult(null);
       setShowCelebration(false);
+      let shouldKeepRolling = true;
+
+      const rollingPromise = (async () => {
+        while (shouldKeepRolling) {
+          const nextRotation = rotationRef.current + 540;
+          await wheelControls.start({
+            rotate: nextRotation,
+            transition: { duration: 0.75, ease: "linear" },
+          });
+          rotationRef.current = nextRotation;
+        }
+      })();
 
       const response = await fetch("/api/spin", {
         method: "POST",
@@ -126,16 +141,21 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
+        shouldKeepRolling = false;
+        await rollingPromise;
         throw new Error(data.code ?? "SPIN_FAILED");
       }
+
+      shouldKeepRolling = false;
+      await rollingPromise;
 
       const winnerIndex = wheelSections.findIndex(
         (section) => section.label === data.spin.label && section.amount === data.spin.amount,
       );
 
       const validWinnerIndex = winnerIndex >= 0 ? winnerIndex : 0;
-      const turns = 9 + Math.floor(power / 10);
-      const current = ((rotation % 360) + 360) % 360;
+      const turns = 7 + Math.floor(power / 12);
+      const current = ((rotationRef.current % 360) + 360) % 360;
       const targetStop = 360 - (validWinnerIndex * sectionAngle + sectionAngle / 2);
       let delta = targetStop - current;
 
@@ -143,21 +163,21 @@ export default function Home() {
         delta += 360;
       }
 
-      const totalRotation = rotation + turns * 360 + delta;
-      setRotation(totalRotation);
+      const totalRotation = rotationRef.current + turns * 360 + delta;
+      await wheelControls.start({
+        rotate: totalRotation,
+        transition: { duration: 4.9, ease: [0.08, 0.86, 0.11, 1] },
+      });
+      rotationRef.current = totalRotation;
       setIncomingSpin(data.spin);
       setPlayers(data.players ?? []);
-      setLeaderboard(data.leaderboard ?? []);
-
-      window.setTimeout(() => {
-        setResult({
-          amount: data.spin.amount,
-          title: `${data.spin.flair} Win`,
-          spinOrder: data.spin.spinOrder,
-        });
-        setShowCelebration(true);
-        setIsSpinning(false);
-      }, 6600);
+      setResult({
+        amount: data.spin.amount,
+        title: `${data.spin.flair} Win`,
+        spinOrder: data.spin.spinOrder,
+      });
+      setShowCelebration(true);
+      setIsSpinning(false);
     } catch (error) {
       const reason = error.message;
       if (reason === "NO_SPINS_LEFT") {
@@ -197,7 +217,6 @@ export default function Home() {
       }
 
       setPlayers(data.players ?? []);
-      setLeaderboard(data.leaderboard ?? []);
       setResult(null);
       setShowCelebration(false);
       setInfoMessage(`Locked! ${name} claimed spin #${spinOrder}. Eid Mubarak!`);
@@ -260,24 +279,24 @@ export default function Home() {
           <motion.section
             key="welcome"
             className="card welcome-card"
-            initial={{ opacity: 0, y: 30, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -14 }}
-            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
           >
             <motion.p
               className="kicker"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.08 }}
             >
               Eid Celebration
             </motion.p>
             <motion.h1
               className="hero-title"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.14 }}
             >
               Eidi Spinner
             </motion.h1>
@@ -285,7 +304,7 @@ export default function Home() {
               className="subtitle"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
+              transition={{ delay: 0.18 }}
             >
               Select your name, spin up to 10 times, and lock whichever spin feels lucky.
             </motion.p>
@@ -302,181 +321,167 @@ export default function Home() {
         ) : (
           <motion.div
             key="spinner"
-            className="game-layout"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            className="game-layout single-column-layout"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.22 }}
           >
-            <section className="card spin-card">
-              <div className="top-row">
-                <div>
-                  <h2 className="panel-title">Spin & Gift</h2>
-                  <p className="tiny-copy">Up to 10 spins per person. Claim any spin you like.</p>
+            {isDashboardLoading ? (
+              <section className="card spin-card">
+                <div className="top-row">
+                  <div className="skeleton-block skeleton-title" />
+                  <div className="skeleton-block skeleton-icon" />
                 </div>
-                <span className="chip">{wheelSections.length} prizes</span>
-              </div>
 
-              <label className="input-wrap" htmlFor="name">
-                <span>Choose your name</span>
-                <select
-                  id="name"
-                  className="name-select"
-                  value={name}
-                  onChange={(event) => {
-                    void selectName(event.target.value);
-                  }}
-                >
-                  <option value="">Select a player</option>
-                  {players.map((player) => (
-                    <option key={player.id} value={player.name}>
-                      {player.name}
-                      {player.isOptional ? " (Optional)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {currentPlayer ? (
-                <div className="player-meta">
-                  <span className="meta-pill">Spins Used: {currentPlayer.spinsUsed}/{currentPlayer.maxSpins}</span>
-                  <span className="meta-pill">Spins Left: {currentPlayer.spinsLeft}</span>
-                  <span className={`meta-pill status-${currentPlayer.status}`}>{currentPlayer.status}</span>
+                <div className="skeleton-stack">
+                  <div className="skeleton-block skeleton-input" />
+                  <div className="skeleton-block skeleton-pill-row" />
+                  <div className="skeleton-block skeleton-input" />
                 </div>
-              ) : null}
 
-              <label className="slider-wrap" htmlFor="power">
-                <div className="slider-topline">
-                  <span>Spin energy</span>
-                  <strong>{power}%</strong>
+                <div className="wheel-skeleton-wrap">
+                  <div className="skeleton-wheel" />
                 </div>
-                <input
-                  id="power"
-                  className="power-slider"
-                  type="range"
-                  min="30"
-                  max="100"
-                  value={power}
-                  onChange={(event) => setPower(Number(event.target.value))}
-                />
-              </label>
 
-              <div className="wheel-area">
-                <div className="pointer" aria-hidden />
-
-                <motion.div
-                  className="wheel"
-                  style={{ background: `conic-gradient(${wheelGradient})` }}
-                  animate={{ rotate: rotation }}
-                  transition={{ duration: 6.6, ease: [0.08, 0.86, 0.11, 1] }}
-                >
-                  {wheelSections.map((section, index) => {
-                    const angle = index * sectionAngle + sectionAngle / 2;
-
-                    return (
-                      <div
-                        key={section.label}
-                        className="wheel-label-slot"
-                        style={{ transform: `translate(-50%, -100%) rotate(${angle}deg)` }}
-                      >
-                        <span
-                          className="wheel-label"
-                          style={{ transform: `rotate(${-angle}deg)` }}
-                        >
-                          ৳{section.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                  <span className="wheel-center">Eid 🌙 Mubarak</span>
-                </motion.div>
-              </div>
-
-              <motion.button
-                className="action-btn"
-                disabled={isSpinning || !canSpin}
-                onClick={() => void spinWheel()}
-                whileHover={{ scale: isSpinning || !canSpin ? 1 : 1.02 }}
-                whileTap={{ scale: isSpinning || !canSpin ? 1 : 0.98 }}
-              >
-                {isSpinning ? "Spinning..." : canSpin ? "Spin the Wheel" : "Select eligible player"}
-              </motion.button>
-
-              {incomingSpin && !isSpinning ? (
-                <p className="tiny-copy accent-copy">
-                  Last spin: #{incomingSpin.spinOrder} = ৳{incomingSpin.amount}. You can claim this or keep spinning.
-                </p>
-              ) : null}
-
-              {currentPlayer?.spins?.length ? (
-                <div className="history-block">
-                  <p className="history-title">Your spin choices</p>
-                  <div className="history-list">
-                    {currentPlayer.spins.map((spin) => (
-                      <button
-                        key={spin.id}
-                        type="button"
-                        className="history-chip"
-                        disabled={currentPlayer.hasClaimed}
-                        onClick={() => void claimSpin(spin.spinOrder)}
-                      >
-                        Claim #{spin.spinOrder} ৳{spin.amount}
-                      </button>
-                    ))}
+                <div className="skeleton-block skeleton-button" />
+              </section>
+            ) : (
+              <section className="card spin-card">
+                <div className="top-row">
+                  <div>
+                    <h2 className="panel-title">Spin & Gift</h2>
+                    <p className="tiny-copy">Up to 10 spins per person. Claim any spin you like.</p>
                   </div>
+                  <FlipToggleNav to="/leaderboard" label="Flip to leaderboard" />
                 </div>
-              ) : null}
 
-              {shouldShowFallback ? (
-                <div className="fallback-card">
-                  <p className="kicker">Spin limit reached</p>
-                  <h3>No spins left, but your fate is already written</h3>
-                  <p>
-                    Choose one from your spins above to lock your Eidi. Your destiny wheel has spoken.
+                <label className="input-wrap" htmlFor="name">
+                  <span>Choose your name</span>
+                  <select
+                    id="name"
+                    className="name-select"
+                    value={name}
+                    onChange={(event) => {
+                      void selectName(event.target.value);
+                    }}
+                  >
+                    <option value="">Select a player</option>
+                    {players.map((player) => (
+                      <option key={player.id} value={player.name}>
+                        {player.name}
+                        {player.isOptional ? " (Optional)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {currentPlayer ? (
+                  <div className="player-meta">
+                    <span className="meta-pill">Spins Used: {currentPlayer.spinsUsed}/{currentPlayer.maxSpins}</span>
+                    <span className="meta-pill">Spins Left: {currentPlayer.spinsLeft}</span>
+                    <span className={`meta-pill status-${currentPlayer.status}`}>{currentPlayer.status}</span>
+                  </div>
+                ) : null}
+
+                <label className="slider-wrap" htmlFor="power">
+                  <div className="slider-topline">
+                    <span>Spin energy</span>
+                    <strong>{power}%</strong>
+                  </div>
+                  <input
+                    id="power"
+                    className="power-slider"
+                    type="range"
+                    min="30"
+                    max="100"
+                    value={power}
+                    onChange={(event) => setPower(Number(event.target.value))}
+                  />
+                </label>
+
+                <div className={`wheel-area ${isSpinning ? "wheel-area-live" : ""}`}>
+                  <div className="pointer" aria-hidden />
+                  <div className="wheel-glow" aria-hidden />
+
+                  <motion.div
+                    className="wheel"
+                    style={{ background: `conic-gradient(${wheelGradient})` }}
+                    animate={wheelControls}
+                    initial={{ rotate: 0 }}
+                  >
+                    {wheelSections.map((section, index) => {
+                      const angle = index * sectionAngle + sectionAngle / 2;
+
+                      return (
+                        <div
+                          key={section.label}
+                          className="wheel-label-slot"
+                          style={{ transform: `translate(-50%, -100%) rotate(${angle}deg)` }}
+                        >
+                          <span
+                            className="wheel-label"
+                            style={{ transform: `rotate(${-angle}deg)` }}
+                          >
+                            ৳{section.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    <span className="wheel-center">Eid 🌙 Mubarak</span>
+                  </motion.div>
+                </div>
+
+                <motion.button
+                  className="action-btn"
+                  disabled={isSpinning || !canSpin}
+                  onClick={() => void spinWheel()}
+                  whileHover={{ scale: isSpinning || !canSpin ? 1 : 1.02 }}
+                  whileTap={{ scale: isSpinning || !canSpin ? 1 : 0.98 }}
+                >
+                  {isSpinning ? "Spinning with Barakah..." : canSpin ? "Spin the Wheel" : "Select eligible player"}
+                </motion.button>
+
+                {incomingSpin && !isSpinning ? (
+                  <p className="tiny-copy accent-copy">
+                    Last spin: #{incomingSpin.spinOrder} = ৳{incomingSpin.amount}. You can claim this or keep spinning.
                   </p>
-                </div>
-              ) : null}
+                ) : null}
 
-              {infoMessage ? <p className="status-note success">{infoMessage}</p> : null}
-              {errorMessage ? <p className="status-note error">{errorMessage}</p> : null}
-            </section>
-
-            <section className="card leaderboard-card">
-              <div className="top-row">
-                <div>
-                  <h2 className="panel-title">Leaderboard</h2>
-                  <p className="tiny-copy">Claimed amounts and spin status</p>
-                </div>
-              </div>
-
-              {isDashboardLoading ? (
-                <p className="tiny-copy">Loading players...</p>
-              ) : (
-                <div className="leaderboard-list">
-                  {leaderboard.map((entry) => (
-                    <div key={entry.name} className="leader-row">
-                      <span className="leader-rank">#{entry.rank}</span>
-                      <div className="leader-main">
-                        <strong>
-                          {entry.name}
-                          {entry.isOptional ? " (Optional)" : ""}
-                        </strong>
-                        <span>
-                          {entry.hasClaimed
-                            ? `Claimed ৳${entry.claimedAmount}`
-                            : entry.status === "yet-to-spin"
-                              ? "Yet to spin"
-                              : entry.status === "exhausted"
-                                ? "Out of spins"
-                                : `In progress (${entry.spinsUsed}/${entry.spinsLeft + entry.spinsUsed})`}
-                        </span>
-                      </div>
-                      <span className={`leader-state status-${entry.status}`}>{entry.status}</span>
+                {currentPlayer?.spins?.length ? (
+                  <div className="history-block">
+                    <p className="history-title">Your spin choices</p>
+                    <div className="history-list">
+                      {currentPlayer.spins.map((spin) => (
+                        <button
+                          key={spin.id}
+                          type="button"
+                          className="history-chip"
+                          disabled={currentPlayer.hasClaimed}
+                          onClick={() => void claimSpin(spin.spinOrder)}
+                        >
+                          Claim #{spin.spinOrder} ৳{spin.amount}
+                        </button>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </section>
+                  </div>
+                ) : null}
+
+                {shouldShowFallback ? (
+                  <div className="fallback-card">
+                    <p className="kicker">Spin limit reached</p>
+                    <h3>No spins left, but your fate is already written</h3>
+                    <p>
+                      Choose one from your spins above to lock your Eidi. Your destiny wheel has spoken.
+                    </p>
+                  </div>
+                ) : null}
+
+                {infoMessage ? <p className="status-note success">{infoMessage}</p> : null}
+                {errorMessage ? <p className="status-note error">{errorMessage}</p> : null}
+              </section>
+            )}
+
           </motion.div>
         )}
       </AnimatePresence>
