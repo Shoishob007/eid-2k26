@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Participant {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  isOptional      Boolean  @default(false)
+  maxSpins        Int      @default(10)
+  spinsUsed       Int      @default(0)
+  hasClaimed      Boolean  @default(false)
+  claimedAmount   Int?
+  claimedSpinOrder Int?
+  claimedSpinId   String?  @unique
+  claimedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  spins Spin[]
+
+  @@index([claimedAmount])
+}
+
+model Spin {
+  id            String      @id @default(cuid())
+  participantId String
+  spinOrder     Int
+  amount        Int
+  label         String
+  flair         String
+  power         Int
+  createdAt     DateTime    @default(now())
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, spinOrder])
+  @@index([participantId, createdAt])
+}

@@ -6,11 +6,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "reset:game": "node scripts/reset-game.mjs"
   },
   "dependencies": {
+    "@prisma/client": "^6.16.2",
     "framer-motion": "^12.38.0",
     "next": "16.1.7",
+    "prisma": "^6.16.2",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
