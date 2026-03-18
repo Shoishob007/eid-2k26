@@ -9,7 +9,12 @@ export async function GET(request) {
 
     try {
         const dashboard = await getDashboard(name);
-        return NextResponse.json(dashboard);
+        return NextResponse.json(dashboard, {
+            headers: {
+                // Tiny cache window makes toggling snappy without keeping stale data for long.
+                "Cache-Control": "public, max-age=3, stale-while-revalidate=15",
+            },
+        });
     } catch (error) {
         return NextResponse.json(
             { message: "Failed to load dashboard.", detail: error.message },

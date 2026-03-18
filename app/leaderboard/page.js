@@ -22,7 +22,7 @@ export default function LeaderboardPage() {
             setIsLoading(true);
 
             try {
-                const response = await fetch("/api/dashboard", { cache: "no-store" });
+                const response = await fetch("/api/dashboard", { cache: "default" });
 
                 if (!response.ok) {
                     throw new Error("LOAD_FAILED");
@@ -74,13 +74,13 @@ export default function LeaderboardPage() {
                 {isLoading ? (
                     <div className="leaderboard-list">
                         {new Array(6).fill(null).map((_, idx) => (
-                            <div key={idx} className="leader-row">
-                                <span className="leader-rank skeleton-block" />
+                            <div key={idx} className="leader-row skeleton-row">
+                                <span className="leader-rank skeleton-rank" />
                                 <div className="leader-main">
                                     <span className="skeleton-block skeleton-leader-name" />
                                     <span className="skeleton-block skeleton-leader-copy" />
                                 </div>
-                                <span className="leader-state skeleton-block" />
+                                <span className="leader-state skeleton-state" />
                             </div>
                         ))}
                     </div>

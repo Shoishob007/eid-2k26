@@ -52,7 +52,7 @@ export default function Home() {
 
     try {
       const query = selectedName ? `?name=${encodeURIComponent(selectedName)}` : "";
-      const response = await fetch(`/api/dashboard${query}`, { cache: "no-store" });
+      const response = await fetch(`/api/dashboard${query}`, { cache: "default" });
 
       if (!response.ok) {
         throw new Error("Could not load dashboard");
