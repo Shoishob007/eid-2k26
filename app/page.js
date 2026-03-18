@@ -20,13 +20,13 @@ const lanterns = [
   { id: 4, left: "76%", delay: 0.3 },
   { id: 5, left: "91%", delay: 0.17 },
 ];
+const FIXED_SPIN_POWER = 68;
 
 export default function Home() {
   const searchParams = useSearchParams();
   const shouldOpenSpinnerDirectly = searchParams.get("view") === "spinner";
   const [started, setStarted] = useState(shouldOpenSpinnerDirectly);
   const [name, setName] = useState("");
-  const [power, setPower] = useState(68);
   const [isSpinning, setIsSpinning] = useState(false);
   const [result, setResult] = useState(null);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -135,7 +135,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name, power }),
+        body: JSON.stringify({ name, power: FIXED_SPIN_POWER }),
       });
 
       const data = await response.json();
@@ -154,7 +154,7 @@ export default function Home() {
       );
 
       const validWinnerIndex = winnerIndex >= 0 ? winnerIndex : 0;
-      const turns = 7 + Math.floor(power / 12);
+      const turns = 7 + Math.floor(FIXED_SPIN_POWER / 12);
       const current = ((rotationRef.current % 360) + 360) % 360;
       const targetStop = 360 - (validWinnerIndex * sectionAngle + sectionAngle / 2);
       let delta = targetStop - current;
@@ -382,22 +382,6 @@ export default function Home() {
                     <span className={`meta-pill status-${currentPlayer.status}`}>{currentPlayer.status}</span>
                   </div>
                 ) : null}
-
-                <label className="slider-wrap" htmlFor="power">
-                  <div className="slider-topline">
-                    <span>Spin energy</span>
-                    <strong>{power}%</strong>
-                  </div>
-                  <input
-                    id="power"
-                    className="power-slider"
-                    type="range"
-                    min="30"
-                    max="100"
-                    value={power}
-                    onChange={(event) => setPower(Number(event.target.value))}
-                  />
-                </label>
 
                 <div className={`wheel-area ${isSpinning ? "wheel-area-live" : ""}`}>
                   <div className="pointer" aria-hidden />
