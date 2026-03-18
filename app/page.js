@@ -32,6 +32,7 @@ export default function Home() {
   const [rotation, setRotation] = useState(0);
   const [result, setResult] = useState(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const canSpin = name.trim().length > 0;
 
   const sectionAngle = 360 / sections.length;
 
@@ -263,12 +264,12 @@ export default function Home() {
 
             <motion.button
               className="action-btn"
-              disabled={isSpinning}
+              disabled={isSpinning || !canSpin}
               onClick={spinWheel}
-              whileHover={{ scale: isSpinning ? 1 : 1.02 }}
-              whileTap={{ scale: isSpinning ? 1 : 0.98 }}
+              whileHover={{ scale: isSpinning || !canSpin ? 1 : 1.02 }}
+              whileTap={{ scale: isSpinning || !canSpin ? 1 : 0.98 }}
             >
-              {isSpinning ? "Spinning..." : "Spin the Wheel"}
+              {isSpinning ? "Spinning..." : canSpin ? "Spin the Wheel" : "Enter Name to Spin"}
             </motion.button>
 
           </motion.section>
