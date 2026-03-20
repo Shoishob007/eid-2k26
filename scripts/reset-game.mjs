@@ -1,12 +1,35 @@
 import { PrismaClient } from "@prisma/client";
 
+const MAX_SPINS = 3;
+const participantsSeed = [
+    { name: "Ifty", isOptional: false },
+    { name: "Diya", isOptional: false },
+    { name: "Anaita", isOptional: false },
+    { name: "Ornoba", isOptional: false },
+    { name: "Raisa", isOptional: false },
+    { name: "Elma", isOptional: false },
+    { name: "Prerona", isOptional: false },
+    { name: "Purnota", isOptional: false },
+    { name: "Towhid", isOptional: false },
+    { name: "Ratul", isOptional: true },
+];
+
 const prisma = new PrismaClient();
 
 async function main() {
     await prisma.$transaction([
+        prisma.participant.createMany({
+            data: participantsSeed.map((player) => ({
+                name: player.name,
+                isOptional: player.isOptional,
+                maxSpins: MAX_SPINS,
+            })),
+            skipDuplicates: true,
+        }),
         prisma.spin.deleteMany(),
         prisma.participant.updateMany({
             data: {
+                maxSpins: MAX_SPINS,
                 spinsUsed: 0,
                 hasClaimed: false,
                 claimedAmount: null,

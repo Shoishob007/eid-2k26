@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { useSearchParams } from "next/navigation";
-import { giverName, wheelSections } from "@/lib/game-config";
+import { giverName, MAX_SPINS, wheelSections } from "@/lib/game-config";
 import FlipToggleNav from "@/app/components/flip-toggle-nav";
 
 const fireworkBursts = new Array(18).fill(null).map((_, index) => ({
@@ -35,13 +35,29 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
   const [incomingSpin, setIncomingSpin] = useState(null);
+  const [isNameMenuOpen, setIsNameMenuOpen] = useState(false);
   const wheelControls = useAnimationControls();
   const rotationRef = useRef(0);
+  const nameMenuRef = useRef(null);
 
   const currentPlayer = useMemo(
     () => players.find((player) => player.name === name) ?? null,
     [players, name],
   );
+
+  const selectedPlayerLabel = useMemo(() => {
+    if (!name) {
+      return "Select a player";
+    }
+
+    const selected = players.find((player) => player.name === name);
+
+    if (!selected) {
+      return name;
+    }
+
+    return `${selected.name}${selected.isOptional ? " (Optional)" : ""}`;
+  }, [players, name]);
 
   const sectionAngle = 360 / wheelSections.length;
   const canSpin = Boolean(name) && Boolean(currentPlayer) && currentPlayer.spinsLeft > 0 && !currentPlayer.hasClaimed;
@@ -55,6 +71,10 @@ export default function Home() {
       const response = await fetch(`/api/dashboard${query}`, { cache: "default" });
 
       if (!response.ok) {
+        if (response.status === 503) {
+          throw new Error("DB_TEMP_UNAVAILABLE");
+        }
+
         throw new Error("Could not load dashboard");
       }
 
@@ -62,7 +82,11 @@ export default function Home() {
       setPlayers(data.players ?? []);
       setErrorMessage("");
     } catch (error) {
-      setErrorMessage("Could not load player data. Check database connection.");
+      if (error.message === "DB_TEMP_UNAVAILABLE") {
+        setErrorMessage("Database is reconnecting. Please wait a moment and try again.");
+      } else {
+        setErrorMessage("Could not load player data. Check database connection.");
+      }
     } finally {
       setIsDashboardLoading(false);
     }
@@ -83,6 +107,32 @@ export default function Home() {
 
     return () => window.clearTimeout(timer);
   }, [showCelebration]);
+
+  useEffect(() => {
+    if (!isNameMenuOpen) {
+      return undefined;
+    }
+
+    const onPointerDown = (event) => {
+      if (!nameMenuRef.current?.contains(event.target)) {
+        setIsNameMenuOpen(false);
+      }
+    };
+
+    const onEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsNameMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onEscape);
+
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [isNameMenuOpen]);
 
   const wheelGradient = useMemo(() => {
     return wheelSections
@@ -184,6 +234,8 @@ export default function Home() {
         setInfoMessage("No spins left. Pick one of your previous spins to claim your Eidi.");
       } else if (reason === "ALREADY_CLAIMED") {
         setInfoMessage("Eidi already claimed for this player.");
+      } else if (reason === "DB_TEMP_UNAVAILABLE") {
+        setErrorMessage("Database is reconnecting. Please retry your spin in a moment.");
       } else {
         setErrorMessage("Spin could not be completed. Please try again.");
       }
@@ -221,7 +273,11 @@ export default function Home() {
       setShowCelebration(false);
       setInfoMessage(`Locked! ${name} claimed spin #${spinOrder}. Eid Mubarak!`);
     } catch (error) {
-      setErrorMessage("Could not claim that spin. Try another one.");
+      if (error.message === "DB_TEMP_UNAVAILABLE") {
+        setErrorMessage("Database is reconnecting. Please retry your claim in a moment.");
+      } else {
+        setErrorMessage("Could not claim that spin. Try another one.");
+      }
     }
   };
 
@@ -306,7 +362,7 @@ export default function Home() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.18 }}
             >
-              Select your name, spin up to 10 times, and lock whichever spin feels lucky.
+              Select your name, spin up to {MAX_SPINS} times, and lock whichever spin feels lucky.
             </motion.p>
 
             <motion.button
@@ -350,29 +406,65 @@ export default function Home() {
                 <div className="top-row">
                   <div>
                     <h2 className="panel-title">Spin & Gift</h2>
-                    <p className="tiny-copy">Up to 10 spins per person. Claim any spin you like.</p>
+                    <p className="tiny-copy">Up to {MAX_SPINS} spins per person. Claim any spin you like.</p>
                   </div>
                   <FlipToggleNav to="/leaderboard" label="Flip to leaderboard" />
                 </div>
 
                 <label className="input-wrap" htmlFor="name">
                   <span>Choose your name</span>
-                  <select
-                    id="name"
-                    className="name-select"
-                    value={name}
-                    onChange={(event) => {
-                      void selectName(event.target.value);
-                    }}
-                  >
-                    <option value="">Select a player</option>
-                    {players.map((player) => (
-                      <option key={player.id} value={player.name}>
-                        {player.name}
-                        {player.isOptional ? " (Optional)" : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="name-select-shell" ref={nameMenuRef}>
+                    <button
+                      id="name"
+                      type="button"
+                      className={`name-select-trigger ${isNameMenuOpen ? "is-open" : ""}`}
+                      aria-haspopup="listbox"
+                      aria-expanded={isNameMenuOpen}
+                      aria-controls="name-listbox"
+                      onClick={() => setIsNameMenuOpen((open) => !open)}
+                    >
+                      <span className={`name-select-trigger-text ${name ? "" : "is-placeholder"}`}>
+                        {selectedPlayerLabel}
+                      </span>
+                    </button>
+
+                    {isNameMenuOpen ? (
+                      <div id="name-listbox" className="name-menu" role="listbox" aria-label="Player list">
+                        <button
+                          type="button"
+                          className={`name-option ${name === "" ? "is-active" : ""}`}
+                          role="option"
+                          aria-selected={name === ""}
+                          onClick={() => {
+                            setIsNameMenuOpen(false);
+                            void selectName("");
+                          }}
+                        >
+                          Select a player
+                        </button>
+                        {players.map((player) => {
+                          const optionLabel = `${player.name}${player.isOptional ? " (Optional)" : ""}`;
+                          const isActive = player.name === name;
+
+                          return (
+                            <button
+                              key={player.id}
+                              type="button"
+                              className={`name-option ${isActive ? "is-active" : ""}`}
+                              role="option"
+                              aria-selected={isActive}
+                              onClick={() => {
+                                setIsNameMenuOpen(false);
+                                void selectName(player.name);
+                              }}
+                            >
+                              {optionLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
                 </label>
 
                 {currentPlayer ? (
@@ -436,17 +528,34 @@ export default function Home() {
                   <div className="history-block">
                     <p className="history-title">Your spin choices</p>
                     <div className="history-list">
-                      {currentPlayer.spins.map((spin) => (
-                        <button
-                          key={spin.id}
-                          type="button"
-                          className="history-chip"
-                          disabled={currentPlayer.hasClaimed}
-                          onClick={() => void claimSpin(spin.spinOrder)}
-                        >
-                          Claim #{spin.spinOrder} ৳{spin.amount}
-                        </button>
-                      ))}
+                      {currentPlayer.spins.map((spin) => {
+                        const isClaimedSpin =
+                          currentPlayer.hasClaimed && currentPlayer.claimedSpinOrder === spin.spinOrder;
+
+                        if (currentPlayer.hasClaimed) {
+                          return (
+                            <span
+                              key={spin.id}
+                              className={`history-chip ${isClaimedSpin ? "history-chip-claimed" : "history-chip-skipped"}`}
+                            >
+                              {isClaimedSpin
+                                ? `Claimed #${spin.spinOrder} ৳${spin.amount}`
+                                : `Skipped #${spin.spinOrder} ৳${spin.amount}`}
+                            </span>
+                          );
+                        }
+
+                        return (
+                          <button
+                            key={spin.id}
+                            type="button"
+                            className="history-chip"
+                            onClick={() => void claimSpin(spin.spinOrder)}
+                          >
+                            Claim #{spin.spinOrder} ৳{spin.amount}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}

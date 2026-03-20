@@ -16,9 +16,11 @@ export async function GET(request) {
             },
         });
     } catch (error) {
+        const status = error.message === "DB_TEMP_UNAVAILABLE" ? 503 : 500;
+
         return NextResponse.json(
             { message: "Failed to load dashboard.", detail: error.message },
-            { status: 500 },
+            { status },
         );
     }
 }

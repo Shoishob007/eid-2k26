@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import FlipToggleNav from "@/app/components/flip-toggle-nav";
+import LeaderboardSkeletonRows from "@/app/components/leaderboard-skeleton";
 
 const lanterns = [
     { id: 1, left: "6%", delay: 0 },
@@ -11,6 +12,26 @@ const lanterns = [
     { id: 4, left: "76%", delay: 0.3 },
     { id: 5, left: "91%", delay: 0.17 },
 ];
+
+function formatStatusLabel(status) {
+    if (status === "yet-to-spin") {
+        return "Yet to spin";
+    }
+
+    if (status === "in-progress") {
+        return "In progress";
+    }
+
+    if (status === "exhausted") {
+        return "Out of spins";
+    }
+
+    if (status === "claimed") {
+        return "Claimed";
+    }
+
+    return status;
+}
 
 export default function LeaderboardPage() {
     const [leaderboard, setLeaderboard] = useState([]);
@@ -25,6 +46,10 @@ export default function LeaderboardPage() {
                 const response = await fetch("/api/dashboard", { cache: "default" });
 
                 if (!response.ok) {
+                    if (response.status === 503) {
+                        throw new Error("DB_TEMP_UNAVAILABLE");
+                    }
+
                     throw new Error("LOAD_FAILED");
                 }
 
@@ -32,7 +57,11 @@ export default function LeaderboardPage() {
                 setLeaderboard(data.leaderboard ?? []);
                 setErrorMessage("");
             } catch (error) {
-                setErrorMessage("Could not load leaderboard right now.");
+                if (error.message === "DB_TEMP_UNAVAILABLE") {
+                    setErrorMessage("Database is reconnecting. Please wait a moment and refresh.");
+                } else {
+                    setErrorMessage("Could not load leaderboard right now.");
+                }
             } finally {
                 setIsLoading(false);
             }
@@ -64,7 +93,7 @@ export default function LeaderboardPage() {
             >
                 <div className="top-row">
                     <div>
-                        <p className="kicker">Eid Ranking</p>
+                        <p className="kicker">Members</p>
                         <h1 className="panel-title">Leaderboard</h1>
                         <p className="tiny-copy">Claimed amounts, active players, and who is still waiting for fate.</p>
                     </div>
@@ -72,18 +101,7 @@ export default function LeaderboardPage() {
                 </div>
 
                 {isLoading ? (
-                    <div className="leaderboard-list">
-                        {new Array(6).fill(null).map((_, idx) => (
-                            <div key={idx} className="leader-row skeleton-row">
-                                <span className="leader-rank skeleton-rank" />
-                                <div className="leader-main">
-                                    <span className="skeleton-block skeleton-leader-name" />
-                                    <span className="skeleton-block skeleton-leader-copy" />
-                                </div>
-                                <span className="leader-state skeleton-state" />
-                            </div>
-                        ))}
-                    </div>
+                    <LeaderboardSkeletonRows />
                 ) : null}
                 {errorMessage ? <p className="status-note error">{errorMessage}</p> : null}
 
@@ -107,7 +125,7 @@ export default function LeaderboardPage() {
                                                     : `In progress (${entry.spinsUsed}/${entry.spinsLeft + entry.spinsUsed})`}
                                     </span>
                                 </div>
-                                <span className={`leader-state status-${entry.status}`}>{entry.status}</span>
+                                <span className={`leader-state status-${entry.status}`}>{formatStatusLabel(entry.status)}</span>
                             </div>
                         ))}
                     </div>

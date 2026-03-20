@@ -8,6 +8,7 @@ const statusMap = {
     NOT_FOUND: 404,
     ALREADY_CLAIMED: 409,
     SPIN_NOT_FOUND: 404,
+    DB_TEMP_UNAVAILABLE: 503,
 };
 
 export async function POST(request) {
